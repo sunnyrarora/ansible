@@ -1,0 +1,201 @@
+Configuration on Ansible server:
+Install Pywinrm to connect Ansible server with Windows box. Also install Kerberos, if you have domain controller users. For below
+purpose we will test it with localwindows user with unencrypted password. 
+---
+First check you are to connect with remote windows box.
+[root@suntest ~]#nc -z -w1 wintest 5985;echo $?
+1
+If you are able to connect, Output will be '1'
+
+---
+[root@suntest ~]#pip install https://github.com/diyan/pywinrm/archive/master.zip#egg=pywinrm
+[root@suntest ~]#yum -y install gcc python-devel krb5-devel krb5-workstation
+
+[root@suntest inventory]# pwd
+/etc/ansible/playbooks/inventory
+[root@suntest inventory]# cat hosts 
+[localhost]
+localhost ansible_connection=local
+
+[windows]
+wintest
+[windows:vars]
+    ansible_user=administrator
+    ansible_password=Password
+    ansible_port=5985
+    ansible_winrm_server_cert_validation=ignore
+    ansible_connection=winrm
+----
+Now let us check running ansible ping.
+[root@suntest inventory]# ansible windows --inventory-file=./hosts -m win_ping -vvvv
+Using /etc/ansible/ansible.cfg as config file
+Loaded callback minimal of type stdout, v2.0
+<wintest> ESTABLISH WINRM CONNECTION FOR USER: administrator on PORT 5986 TO wintest
+wintest | UNREACHABLE! => {
+    "changed": false, 
+    "msg": "ssl: HTTPSConnectionPool(host='wintest', port=5986): Max retries exceeded with url: /wsman (Caused by NewConnectionError('<requests.packages.urllib3.connection.VerifiedHTTPSConnection object at 0x7f7fd78a4910>: Failed to establish a new connection: [Errno 111] Connection refused',))", 
+    "unreachable": true
+}
+--
+We are getting an error,I tried troubleshoot this over and came to know that ->I am getting connection refused. So winrm is connecting but isn't happy with something.
+======================================================================
+Let us troubleshoot to resolve this  error.  Make Sure that Powershell 3.0 is installed.
+On the remote windows machine:
+From Powershell 3.0 run -> 
+PS C:\Users\Administrator>Enable-PSRemoting
+Open the firewall with: netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in localport=5985 protocol=TCP action=allow
+
+On Windows(2008R2 SP1) box, check the winrm configuration: 
+C:\Users\Administrator>winrm get winrm/config
+Config
+    MaxEnvelopeSizekb = 500
+    MaxTimeoutms = 60000
+    MaxBatchItems = 32000
+    MaxProviderRequests = 4294967295
+    Client
+        NetworkDelayms = 5000
+        URLPrefix = wsman
+        AllowUnencrypted = false
+        Auth
+            Basic = true
+            Digest = true
+            Kerberos = true
+            Negotiate = true
+            Certificate = true
+            CredSSP = false
+        DefaultPorts
+            HTTP = 5985
+            HTTPS = 5986
+        TrustedHosts
+    Service
+        RootSDDL = O:NSG:BAD:P(A;;GA;;;BA)(A;;GR;;;IU)S:P(AU;FA;GA;;;WD)(AU;SA;G
+XGW;;;WD)
+        MaxConcurrentOperations = 4294967295
+        MaxConcurrentOperationsPerUser = 1500
+        EnumerationTimeoutms = 240000
+        MaxConnections = 300
+        MaxPacketRetrievalTimeSeconds = 120
+        AllowUnencrypted = false
+        Auth
+            Basic = false
+            Kerberos = true
+            Negotiate = true
+            Certificate = false
+            CredSSP = false
+            CbtHardeningLevel = Relaxed
+        DefaultPorts
+            HTTP = 5985
+            HTTPS = 5986
+        IPv4Filter = *
+        IPv6Filter = *
+        EnableCompatibilityHttpListener = false
+        EnableCompatibilityHttpsListener = false
+        CertificateThumbprint
+        AllowRemoteAccess = true
+    Winrs
+        AllowRemoteShellAccess = true
+        IdleTimeout = 7200000
+        MaxConcurrentUsers = 10
+        MaxShellRunTime = 2147483647
+        MaxProcessesPerShell = 25
+        MaxMemoryPerShellMB = 1024
+        MaxShellsPerUser = 30
+
+---
+We need to enable few settings on winRM config. Run below commands via powershell. 
+(This is also helpful in case of Accessing via cross platform tools like chef, vagrant, packer, ruby or go)
+PS C:\Users\Administrator>winrm set winrm/config/client/auth '@{Basic="true"}'
+PS C:\Users\Administrator>winrm set winrm/config/service/auth '@{Basic="true"}'
+PS C:\Users\Administrator>winrm set winrm/config/service '@{AllowUnencrypted="true"}'
+---
+
+Now let us test the connection on windows box itself
+
+PS C:\Users\Administrator> Test-WSMan -ComputerName wintest
+
+Running First time you will get below error.
+
+Test-WSMan : <f:WSManFault xmlns:f="http://schemas.microsoft.com/wbem/wsman/1/wsmanfault" Code="2150858770
+Machine="wintest"><f:Message>The client cannot connect to the destination specified in the request. Verify
+service on the destination is running and is accepting requests. Consult the logs and documentation for th
+WS-Management service running on the destination, most commonly IIS or WinRM. If the destination is the Wi
+run the following command on the destination to analyze and configure the WinRM service: "winrm quickconfi
+</f:Message></f:WSManFault>
+At line:1 char:1
++ Test-WSMan -ComputerName wintest
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (wintest:String) [Test-WSMan], InvalidOperationException
+    + FullyQualifiedErrorId : WsManError,Microsoft.WSMan.Management.TestWSManCommand
+
+---
+Now , let us Turn on the Winrm
+
+PS C:\Users\Administrator> winrm quickconfig
+WinRM service is already running on this machine.
+WinRM is not set up to allow remote access to this machine for management.
+The following changes must be made:
+
+Create a WinRM listener on HTTP://* to accept WS-Man requests to any IP on this machine.
+Enable the WinRM firewall exception.
+Configure LocalAccountTokenFilterPolicy to grant administrative rights remotely to local users.
+
+Make these changes [y/n]? y
+
+WinRM has been updated for remote management.
+
+Created a WinRM listener on HTTP://* to accept WS-Man requests to any IP on this machine.
+WinRM firewall exception enabled.
+Configured LocalAccountTokenFilterPolicy to grant administrative rights remotely to local users.
+
+========================
+Now you should be able to ping windows box from ansible. 
+
+[root@suntest inventory]# ansible windows --inventory-file=./hosts -m win_ping -vvvv
+Using /etc/ansible/ansible.cfg as config file
+Loaded callback minimal of type stdout, v2.0
+<wintest> ESTABLISH WINRM CONNECTION FOR USER: administrator on PORT 5985 TO wintest
+<wintest> EXEC Set-StrictMode -Version Latest
+(New-Item -Type Directory -Path $env:temp -Name "ansible-tmp-1477647222.85-223069843445474").FullName | Write-Host -Separator '';
+<wintest> PUT "/tmp/tmpf3fYFP" TO "C:\Users\Administrator\AppData\Local\Temp\ansible-tmp-1477647222.85-223069843445474\win_ping.ps1"
+<wintest> EXEC Set-StrictMode -Version Latest
+Try
+{
+& 'C:\Users\Administrator\AppData\Local\Temp\ansible-tmp-1477647222.85-223069843445474\win_ping.ps1'
+}
+Catch
+{
+$_obj = @{ failed = $true }
+If ($_.Exception.GetType)
+{
+$_obj.Add('msg', $_.Exception.Message)
+}
+Else
+{
+$_obj.Add('msg', $_.ToString())
+}
+If ($_.InvocationInfo.PositionMessage)
+{
+$_obj.Add('exception', $_.InvocationInfo.PositionMessage)
+}
+ElseIf ($_.ScriptStackTrace)
+{
+$_obj.Add('exception', $_.ScriptStackTrace)
+}
+Try
+{
+$_obj.Add('error_record', ($_ | ConvertTo-Json | ConvertFrom-Json))
+}
+Catch
+{
+}
+Echo $_obj | ConvertTo-Json -Compress -Depth 99
+Exit 1
+}
+Finally { Remove-Item "C:\Users\Administrator\AppData\Local\Temp\ansible-tmp-1477647222.85-223069843445474" -Force -Recurse -ErrorAction SilentlyContinue }
+wintest | SUCCESS => {
+    "changed": false, 
+    "invocation": {
+        "module_name": "win_ping"
+    }, 
+    "ping": "pong"
+}
