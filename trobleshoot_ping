@@ -1,3 +1,8 @@
+Here we are trying to connect ansible server to the windows box, via winrm. We will test ping command.
+Two hosts
+1) suntest(CentOS 6.5) - This is our ansible box.
+2) wintest (Windows 2008R2 SP1)
+---
 Configuration on Ansible server:
 Install Pywinrm to connect Ansible server with Windows box. Also install Kerberos, if you have domain controller users. For below
 purpose we will test it with localwindows user with unencrypted password. 
