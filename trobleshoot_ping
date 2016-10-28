@@ -7,6 +7,10 @@ Configuration on Ansible server:
 Install Pywinrm to connect Ansible server with Windows box. Also install Kerberos, if you have domain controller users. For below
 purpose we will test it with localwindows user with unencrypted password. 
 ---
+Check ansible version
+[root@suntest inventory]# ansible --version | grep ^ansible
+ansible 2.1.2.0
+
 First check you are to connect with remote windows box.
 [root@suntest ~]#nc -z -w1 wintest 5985;echo $?
 1
