@@ -37,7 +37,8 @@ wintest | UNREACHABLE! => {
     "unreachable": true
 }
 --
-We are getting an error,I tried troubleshoot this over and came to know that ->I am getting connection refused. So winrm is connecting but isn't happy with something.
+We are getting an error,I tried troubleshoot this over and came to know that ->I am getting connection refused. 
+So winrm is connecting but isn't happy with something.
 ======================================================================
 Let us troubleshoot to resolve this  error.  Make Sure that Powershell 3.0 is installed.
 On the remote windows machine:
