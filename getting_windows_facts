@@ -1,6 +1,6 @@
 
 Please refer to the previous Troubleshooting which we did on for getting the ping response of Windows box from Ansible machine. 
-https://github.com/sunnyrarora/ansible/blob/master/trobleshoot_ping
+https://github.com/sunnyrarora/ansible/blob/master/trobleshoot_ping_windows
 
 Here we are able to get the ping response.
 [root@suntest inventory]# ansible windows --inventory-file=./hosts -m win_ping
