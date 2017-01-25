@@ -1,0 +1,126 @@
+
+We will take example : We are having 3 hosts with CentOS 7.2 having internet access->
+10.217.20.5  vm1  vm1.local.net
+10.217.20.6  vm2  vm2.local.net
+10.217.20.7  vm3  vm3.local.net
+-
+We will be using host1 -> vm1 for pushing the ansible based installations on all 3 hosts.
+
+-----
+Step 1: Let us first install the epel repository :
+
+[root@vm1 ~]# wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-8.noarch.rpm
+
+[root@vm1 ~]# rpm -ivh epel-release-7-8.noarch.rpm
+Preparing...                          ################################# [100%]
+Updating / installing...
+   1:epel-release-7-8                 ################################# [100%]
+-------
+Step 2: Installing ansible on one of the hosts
+
+[root@vm1 ~]# yum install ansible -y
+------
+Step 3: generate a ssh key so that we can access other 2 hosts easily.
+[root@vm1 ~]# ssh-keygen -t rsa -b 4096 -C "vm1.local.net"
+-----
+Steo 4: Copy this on all 3 hosts,existing in which it was generated
+
+[root@vm1 ~]# ssh-copy-id root@10.217.20.5
+[root@vm1 ~]# ssh-copy-id root@10.217.20.6
+[root@vm1 ~]# ssh-copy-id root@10.217.20.7
+
+------
+Step 5: Now let us edit the default hosts file of ansible for our hosts
+
+[root@vm1 ~]# vi /etc/ansible/hosts
+[portal]
+10.217.20.5
+10.217.20.6
+10.217.20.7
+------
+Step 6: Let us run some commands, so that we can test our ansible is working on remote hosts.
+
+[root@vm1 ~]# ansible -m ping portal
+10.217.20.6 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+10.217.20.5 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+10.217.20.7 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+
+
+---------
+STep 7:  Let us now install pip on all 3 hosts.
+
+[root@vm1 ~]# ansible -m command -a "easy_install pip" portal
+------
+[root@vm1 ~]# ansible -m command -a "pip install virtualenv" portal
+10.217.20.6 | SUCCESS | rc=0 >>
+Collecting virtualenv
+  Downloading virtualenv-15.1.0-py2.py3-none-any.whl (1.8MB)
+Installing collected packages: virtualenv
+Successfully installed virtualenv-15.1.0
+
+10.217.20.5 | SUCCESS | rc=0 >>
+Collecting virtualenv
+  Downloading virtualenv-15.1.0-py2.py3-none-any.whl (1.8MB)
+Installing collected packages: virtualenv
+Successfully installed virtualenv-15.1.0
+
+10.217.20.7 | SUCCESS | rc=0 >>
+Collecting virtualenv
+  Downloading virtualenv-15.1.0-py2.py3-none-any.whl (1.8MB)
+Installing collected packages: virtualenv
+Successfully installed virtualenv-15.1.0
+
+-------------
+Step 8 : Let us create a yaml file for installation of various pakages via ansible-playbook.
+
+[root@vm1 /etc/ansible]# vi setup.yaml
+---
+- hosts: all
+  sudo: true
+
+  tasks:
+    - name: Install required system packages.
+      yum: name={{ item }} state=installed
+      with_items:
+       - gcc
+       - openssl-devel
+       - bzip2-devel
+       - libffi-devel
+       - python-devel
+
+--------------
+Step 9 : run the ansible playbook for installing these pakages.
+
+[root@vm1 /etc/ansible]# ansible-playbook ./setup.yaml -i hosts
+[DEPRECATION WARNING]: Instead of sudo/sudo_user, use become/become_user and make sure become_method is 'sudo' (default).
+
+This feature will be removed in a future release. Deprecation warnings can be disabled by setting
+deprecation_warnings=False in ansible.cfg.
+
+PLAY [all] *********************************************************************
+
+TASK [setup] *******************************************************************
+ok: [10.217.20.5]
+ok: [10.217.20.6]
+ok: [10.217.20.7]
+
+TASK [Install required system packages.] ***************************************
+changed: [10.217.20.5] => (item=[u'gcc', u'openssl-devel', u'bzip2-devel', u'libffi-devel', u'python-devel'])
+changed: [10.217.20.6] => (item=[u'gcc', u'openssl-devel', u'bzip2-devel', u'libffi-devel', u'python-devel'])
+changed: [10.217.20.7] => (item=[u'gcc', u'openssl-devel', u'bzip2-devel', u'libffi-devel', u'python-devel'])
+
+PLAY RECAP *********************************************************************
+10.217.20.5             : ok=2    changed=1    unreachable=0    failed=0
+10.217.20.6             : ok=2    changed=1    unreachable=0    failed=0
+10.217.20.7             : ok=2    changed=1    unreachable=0    failed=0
+
+-------------------
+
