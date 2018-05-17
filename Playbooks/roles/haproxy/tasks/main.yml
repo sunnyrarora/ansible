@@ -1,0 +1,6 @@
+---
+
+
+# A role to install haproxy....
+- include: haproxy_install.yml
+- include: haproxy_configure.yml
