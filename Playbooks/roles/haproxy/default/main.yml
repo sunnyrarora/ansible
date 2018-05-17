@@ -1,0 +1,7 @@
+---
+
+# Default configuration options for HAproxy
+
+
+haproxy_yum_packages:
+  - haproxy
