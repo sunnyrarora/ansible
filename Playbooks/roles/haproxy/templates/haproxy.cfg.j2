@@ -1,0 +1,64 @@
+# {{ ansible_managed }}
+
+global
+  daemon
+  group  haproxy
+  maxconn  10000
+  pidfile  /var/run/haproxy.pid
+  user  haproxy
+
+defaults
+  log  127.0.0.1 local2 warning
+  mode  tcp
+  option  tcplog
+  option  redispatch
+  retries  3
+  timeout  connect 5s
+  timeout  client 30s
+  timeout  server 30s
+
+
+{% for proxy in proxy_config %}
+listen {{ proxy.name }}
+  bind {{ proxy.bind_public_ip }}:{{ proxy.public_port }}
+  bind {{ proxy.bind_private_ip }}:{{ proxy.private_port }}
+  mode {{ proxy.mode }}
+  option {{ proxy.option }}
+{% if  proxy.backup is defined %}
+{% if proxy.backend_nodes is defined %}
+{% for host in proxy.backend_nodes %}
+{% if host.leader is defined %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} check port {{ proxy.backend_port }} inter {{ proxy.interval }} rise {{ proxy.nodes_count }} fall {{ proxy.nodes_count }}
+{% else %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} check port {{ proxy.backend_port }} inter {{ proxy.interval }} rise {{ proxy.nodes_count }} fall {{ proxy.nodes_count }} backup
+{% endif %}
+{% endfor %}
+
+{% else %}
+{% for host in backend_nodes %}
+{% if host.leader is defined %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} check port {{ proxy.backend_port }} inter {{ proxy.interval }} rise {{ proxy.nodes_count }} fall {{ proxy.nodes_count }}
+{% else %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} check port {{ proxy.backend_port }} inter {{ proxy.interval }} rise {{ proxy.nodes_count }} fall {{ proxy.nodes_count }} backup
+{% endif %}
+{% endfor %}
+{% endif %}
+{% elif proxy.cookie is defined%}
+  cookie {{ proxy.cookie }}
+{% for host in backend_nodes %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} cookie {{ host.name }} check
+{% endfor %}
+{% else %}
+{% for host in backend_nodes %}
+  server {{ host.name }} {{ host.ip }}:{{ proxy.backend_port }} check
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+
+
+listen stats
+  bind *:81
+  mode  http
+  stats  enable
